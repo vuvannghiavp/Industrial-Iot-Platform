@@ -1,0 +1,12 @@
+user gateway
+topic write smarthome/+/+/telemetry
+topic read local/+/+/command
+
+user node_red
+topic read smarthome/+/+/telemetry
+topic read smarthome/+/+/command
+topic write smarthome/+/+/alerts
+topic write local/+/+/command
+
+user aws_bridge
+topic readwrite smarthome/#

@@ -1,0 +1,96 @@
+[
+  {
+    "id": "local-broker",
+    "type": "mqtt-broker",
+    "name": "Local Mosquitto",
+    "broker": "127.0.0.1",
+    "port": "1883",
+    "clientid": "node-red-rule-engine",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": false,
+    "autoUnsubscribe": true
+  },
+  {
+    "id": "tab-local-rules",
+    "type": "tab",
+    "label": "Offline Local Rules",
+    "disabled": false
+  },
+  {
+    "id": "telemetry-in",
+    "type": "mqtt in",
+    "z": "tab-local-rules",
+    "name": "Telemetry stream",
+    "topic": "smarthome/+/+/telemetry",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "local-broker",
+    "x": 130,
+    "y": 100,
+    "wires": [["overheat-rule"]]
+  },
+  {
+    "id": "overheat-rule",
+    "type": "function",
+    "z": "tab-local-rules",
+    "name": "Overheat: alert + fan ON",
+    "func": "const v = msg.payload?.values?.temperature;\nif (typeof v !== 'number' || v < 30) return null;\nconst [, site, gateway] = msg.topic.split('/');\nconst command = { action: 'turn_on', target: 'fan', source: 'local_rule', reason: 'temperature_threshold', temperature: v };\nconst alert = { severity: 'warning', type: 'overheat', message: `Temperature ${v}°C exceeds 30°C`, device_id: msg.payload.device_id, timestamp: new Date().toISOString() };\nreturn [{ payload: command, topic: `local/${site}/${gateway}/command` }, { payload: alert, topic: `smarthome/${site}/${gateway}/alerts` }];",
+    "outputs": 2,
+    "x": 380,
+    "y": 100,
+    "wires": [["local-command-out"], ["alert-out"]]
+  },
+  {
+    "id": "alert-out",
+    "type": "mqtt out",
+    "z": "tab-local-rules",
+    "name": "Alert stream",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "broker": "local-broker",
+    "x": 630,
+    "y": 130,
+    "wires": []
+  },
+  {
+    "id": "command-in",
+    "type": "mqtt in",
+    "z": "tab-local-rules",
+    "name": "Cloud/manual commands",
+    "topic": "smarthome/+/+/command",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "local-broker",
+    "x": 150,
+    "y": 220,
+    "wires": [["validate-cloud-command"]]
+  },
+  {
+    "id": "validate-cloud-command",
+    "type": "function",
+    "z": "tab-local-rules",
+    "name": "Validate cloud command",
+    "func": "const p = msg.payload;\nconst parts = msg.topic.split('/');\nif (!p || !['turn_on','turn_off'].includes(p.action) || !['fan','light'].includes(p.target)) return null;\nif (parts.length !== 4 || parts[0] !== 'smarthome' || !parts[1] || !parts[2] || parts[3] !== 'command') return null;\nmsg.topic = `local/${parts[1]}/${parts[2]}/command`;\nmsg.payload = { action: p.action, target: p.target, source: 'cloud', device_id: p.device_id };\nreturn msg;",
+    "outputs": 1,
+    "x": 420,
+    "y": 220,
+    "wires": [["local-command-out"]]
+  },
+  {
+    "id": "local-command-out",
+    "type": "mqtt out",
+    "z": "tab-local-rules",
+    "name": "Forward command to gateway",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "broker": "local-broker",
+    "x": 680,
+    "y": 200,
+    "wires": []
+  }
+]
