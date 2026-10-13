@@ -1,12 +1,14 @@
 user gateway
-topic write smarthome/+/+/telemetry
-topic read local/+/+/command
+topic write smarthome/home-01/pi-gateway-01/telemetry
+topic read local/home-01/pi-gateway-01/command
 
 user node_red
-topic read smarthome/+/+/telemetry
-topic read smarthome/+/+/command
-topic write smarthome/+/+/alerts
-topic write local/+/+/command
+topic read smarthome/home-01/pi-gateway-01/telemetry
+topic read smarthome/home-01/pi-gateway-01/command
+topic write smarthome/home-01/pi-gateway-01/alerts
+topic write local/home-01/pi-gateway-01/command
 
 user aws_bridge
-topic readwrite smarthome/#
+topic read smarthome/home-01/pi-gateway-01/telemetry
+topic read smarthome/home-01/pi-gateway-01/alerts
+topic write smarthome/home-01/pi-gateway-01/command

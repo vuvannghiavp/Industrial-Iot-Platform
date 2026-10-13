@@ -23,7 +23,13 @@ file at `/etc/mosquitto/passwd` with three users: `gateway`, `node_red`, and
 the config file permissions because Mosquitto bridge credentials are stored
 there in plaintext. Replace the placeholder in the deployed, protected copy
 of the config, not in a version-controlled source file. Keep AWS certificates
-readable only by the Mosquitto service account.
+readable only by the Mosquitto service account. The bridge uses its own AWS
+IoT certificate at `/etc/mosquitto/certs/certificate.pem.crt` and key at
+`/etc/mosquitto/certs/private.pem.key`, copied from this directory's `certs/`.
+Keep the FastAPI certificate and private key in the separate
+`backend-fastapi/certs/` directory; never reuse or copy the bridge private key
+for the API. The public AWS root CA may be installed for each component
+independently.
 
 For example, create the password file using `mosquitto_passwd -c` for the
 first user and `mosquitto_passwd` for each additional user. Do not commit the
@@ -40,11 +46,20 @@ If Node-RED runs in a container, it needs an explicitly configured reachable
 listener address and broker address; keep authentication and ACLs enabled,
 and restrict the listener to the trusted container network.
 
-The bridge forwards telemetry and alerts only to AWS (`out`) and commands
-only from AWS (`in`). Internal commands use `local/<site>/<gateway>/command`
-and therefore are not bridged back to AWS. Ensure the AWS IoT policy allows
-the bridge certificate to publish telemetry/alerts and subscribe/receive
-commands on the corresponding `smarthome/...` topics.
+The example bridge is restricted to site `home-01` and gateway
+`pi-gateway-01`. Its AWS MQTT client ID is `pi-gateway-01`; keep that in sync
+with the certificate policy's `iot:Connect` client ARN. The bridge publishes
+only telemetry and alerts to AWS and subscribes only to that gateway's command
+topic. AWS commands arrive locally on `smarthome/home-01/pi-gateway-01/command`;
+Node-RED validates them and forwards them to
+`local/home-01/pi-gateway-01/command`, which the gateway consumes. Internal
+commands on `local/...` are not bridged back to AWS.
+
+The attached AWS IoT policy should grant `iot:Publish` only for the telemetry
+and alerts topics, and `iot:Subscribe`/`iot:Receive` only for the command
+topic/topic filter. If `SITE_ID` or `GATEWAY_ID` changes in the gateway
+environment, update the bridge topic mappings, local ACL, Node-RED flow, and
+AWS policy together.
 
 ## Run
 

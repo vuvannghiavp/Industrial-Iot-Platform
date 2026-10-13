@@ -57,9 +57,12 @@ class MqttService:
             LOG.error("AWS IoT connection refused: %s", reason_code)
             return
         self.connected = True
-        root = self.settings.mqtt_topic_prefix
-        client.subscribe(f"{root}/+/+/telemetry", qos=1)
-        client.subscribe(f"{root}/+/+/alerts", qos=1)
+        gateway_topic = (
+            f"{self.settings.mqtt_topic_prefix}/"
+            f"{self.settings.mqtt_site_id}/{self.settings.mqtt_gateway_id}"
+        )
+        client.subscribe(f"{gateway_topic}/telemetry", qos=1)
+        client.subscribe(f"{gateway_topic}/alerts", qos=1)
         LOG.info("Subscribed to AWS IoT telemetry and alerts")
 
     def _on_disconnect(self, _client: mqtt.Client, _userdata: Any, _disconnect_flags: Any, reason_code: Any, _properties: Any) -> None:

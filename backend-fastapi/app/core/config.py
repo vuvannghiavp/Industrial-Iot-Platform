@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     aws_iot_key_file: str = ""
     mqtt_topic_prefix: str = "smarthome"
     mqtt_site_id: str = "home-01"
+    mqtt_gateway_id: str = "pi-gateway-01"
     bootstrap_admin_email: str = ""
     bootstrap_admin_password: str = ""
 
