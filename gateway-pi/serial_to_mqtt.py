@@ -108,6 +108,14 @@ class TelemetryOutbox:
                 )
                 db.execute("DELETE FROM pending_samples")
 
+    def enqueue_event(self, topic: str, payload: str) -> None:
+        with closing(self._connect()) as db:
+            with db:
+                db.execute(
+                    "INSERT INTO telemetry_outbox (topic, payload, created_at) VALUES (?, ?, ?)",
+                    (topic, payload, datetime.now(UTC).isoformat()),
+                )
+
     def oldest(self) -> tuple[int, str, str] | None:
         with closing(self._connect()) as db:
             row = db.execute(
@@ -131,6 +139,7 @@ class GatewayCollector:
         self.commands: queue.Queue[dict[str, str]] = queue.Queue(maxsize=100)
         self.outbox = TelemetryOutbox(OUTBOX_PATH)
         self.samples = self.outbox.load_samples()
+        self.actuator_states: dict[str, bool] = {}
         self.modbus = ModbusSerialClient(
             port=SERIAL_PORT,
             baudrate=BAUDRATE,
@@ -228,6 +237,34 @@ class GatewayCollector:
             sample[sensor_type] = raw * scale
         return sample
 
+    def read_actuator_states(self) -> dict[str, bool] | None:
+        response = self.modbus.read_coils(address=0, count=len(COIL_MAP), device_id=SLAVE_ID)
+        if response.isError():
+            LOG.warning("Modbus coil read failed: %s", response)
+            return None
+        if len(response.bits) < len(COIL_MAP):
+            LOG.warning("Modbus returned %s coils; expected %s", len(response.bits), len(COIL_MAP))
+            return None
+        return {target: bool(response.bits[address]) for target, address in COIL_MAP.items()}
+
+    def publish_actuator_states(self, states: dict[str, bool]) -> bool:
+        payload = {
+            "message_id": str(uuid.uuid4()),
+            "site_id": SITE_ID,
+            "gateway_id": GATEWAY_ID,
+            "device_id": DEVICE_ID,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "values": {},
+            "actuators": states,
+        }
+        try:
+            self.outbox.enqueue_event(TOPIC, json.dumps(payload, separators=(",", ":")))
+        except sqlite3.Error:
+            LOG.exception("Could not persist actuator state; it will be retried on the next poll")
+            return False
+        LOG.info("Queued confirmed actuator states for %s: %s", DEVICE_ID, states)
+        return True
+
     def publish_average(self) -> None:
         buckets: dict[str, list[float]] = defaultdict(list)
         for sample in self.samples:
@@ -245,6 +282,7 @@ class GatewayCollector:
             "timestamp": datetime.now(UTC).isoformat(),
             "sample_count": len(self.samples),
             "values": averages,
+            "actuators": self.actuator_states,
         }
         sample_count = len(self.samples)
         try:
@@ -294,6 +332,12 @@ class GatewayCollector:
             LOG.error("Modbus command failed for %s: %s", command["target"], response)
             return
         LOG.info("Executed %s for %s on Modbus coil %s", command["action"], command["target"], address)
+        states = self.read_actuator_states()
+        if states is None:
+            LOG.error("Could not confirm actuator state after command for %s", command["target"])
+            return
+        if self.publish_actuator_states(states):
+            self.actuator_states = states
 
     def run(self) -> None:
         self.mqtt.connect_async(MQTT_HOST, MQTT_PORT, keepalive=60)
@@ -305,27 +349,23 @@ class GatewayCollector:
                 except sqlite3.Error:
                     LOG.exception("Telemetry outbox database operation failed")
                 try:
+                    if not self.modbus.connected and not self.modbus.connect():
+                        LOG.warning("Cannot connect to Modbus RTU at %s", SERIAL_PORT)
+                        self.stop_event.wait(POLL_SECONDS)
+                        continue
+                    actual_states = self.read_actuator_states()
+                    if actual_states is not None and actual_states != self.actuator_states:
+                        if self.publish_actuator_states(actual_states):
+                            self.actuator_states = actual_states
                     try:
                         command = self.commands.get_nowait()
                     except queue.Empty:
                         command = None
                     if command is not None:
-                        if not self.modbus.connected and not self.modbus.connect():
-                            try:
-                                self.commands.put_nowait(command)
-                            except queue.Full:
-                                LOG.error("Command queue filled while reconnecting; command was rejected")
-                            LOG.warning("Cannot connect to Modbus RTU at %s", SERIAL_PORT)
-                            self.stop_event.wait(POLL_SECONDS)
-                            continue
                         self.handle_command(command)
                     elif len(self.samples) >= SAMPLES_PER_AGGREGATE:
                         self.publish_average()
                     else:
-                        if not self.modbus.connected and not self.modbus.connect():
-                            LOG.warning("Cannot connect to Modbus RTU at %s", SERIAL_PORT)
-                            self.stop_event.wait(POLL_SECONDS)
-                            continue
                         sample = self.read_sample()
                         if sample is not None:
                             self.outbox.save_sample(sample)

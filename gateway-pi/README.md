@@ -13,6 +13,21 @@ to one outbox message atomically; that aggregate remains until the local
 broker acknowledges its QoS 1 publish. Set `GATEWAY_OUTBOX_PATH` to a
 persistent, writable filesystem location.
 
+The gateway reads the fan and light output coils from Modbus every poll.
+Changed states and successful command writes are immediately queued to the
+same telemetry topic in the `actuators` object; regular sensor aggregates also
+include both current coil states. FastAPI stores these states on the device
+record and broadcasts them to the dashboard over WebSocket. The dashboard
+therefore follows Node-RED automatic commands as well as commands sent from
+the UI, without treating MQTT publish acceptance as hardware confirmation.
+
+The Node-RED temperature rule turns the fan on above 33°C and off below 25°C.
+Sensor telemetry is averaged across ten successful reads (about 20 seconds at
+the default two-second poll interval), so the rule evaluates each published
+average rather than every raw sensor read. It publishes a command only when
+the fan needs to change state; the subsequent Modbus coil report is what
+updates the device state in PostgreSQL and the dashboard.
+
 ## Local broker security
 
 The Mosquitto configuration denies anonymous clients and applies

@@ -30,17 +30,28 @@
     "broker": "local-broker",
     "x": 130,
     "y": 100,
-    "wires": [["overheat-rule"]]
+    "wires": [["overheat-rule", "fan-off-threshold"]]
   },
   {
     "id": "overheat-rule",
     "type": "function",
     "z": "tab-local-rules",
-    "name": "Overheat: alert + fan ON",
-    "func": "const v = msg.payload?.values?.temperature;\nif (typeof v !== 'number' || v < 30) return null;\nconst [, site, gateway] = msg.topic.split('/');\nconst command = { action: 'turn_on', target: 'fan', source: 'local_rule', reason: 'temperature_threshold', temperature: v };\nconst alert = { severity: 'warning', type: 'overheat', message: `Temperature ${v}°C exceeds 30°C`, device_id: msg.payload.device_id, timestamp: new Date().toISOString() };\nreturn [{ payload: command, topic: `local/${site}/${gateway}/command` }, { payload: alert, topic: `smarthome/${site}/${gateway}/alerts` }];",
+    "name": "Temperature > 35°C: fan ON",
+    "func": "const v = msg.payload?.values?.temperature;\nif (typeof v !== 'number' || v <= 35) return null;\nconst [, site, gateway] = msg.topic.split('/');\nif (!site || !gateway) return null;\nconst actual = msg.payload?.actuators?.fan;\nlet pending = flow.get('fanAutoPending');\nif (typeof actual === 'boolean' && pending === actual) {\n    pending = null;\n    flow.set('fanAutoPending', null);\n    flow.set('fanAutoState', actual ? 'on' : 'off');\n}\nconst knownOn = typeof actual === 'boolean' ? actual : flow.get('fanAutoState') === 'on';\nif (pending === true || (knownOn && pending !== false)) return null;\nflow.set('fanAutoPending', true);\nflow.set('fanAutoState', 'on');\nconst command = { action: 'turn_on', target: 'fan', source: 'local_rule', reason: 'temperature_above_35', temperature: v };\nconst alert = { severity: 'warning', type: 'overheat', message: `Temperature ${v}°C is above the fan-on threshold (35°C); requesting fan ON.`, device_id: msg.payload.device_id, timestamp: new Date().toISOString() };\nreturn [{ payload: command, topic: `local/${site}/${gateway}/command` }, { payload: alert, topic: `smarthome/${site}/${gateway}/alerts` }];",
     "outputs": 2,
     "x": 380,
     "y": 100,
+    "wires": [["local-command-out"], ["alert-out"]]
+  },
+  {
+    "id": "fan-off-threshold",
+    "type": "function",
+    "z": "tab-local-rules",
+    "name": "Temperature < 25°C: fan OFF",
+    "func": "const v = msg.payload?.values?.temperature;\nif (typeof v !== 'number' || v >= 25) return null;\nconst [, site, gateway] = msg.topic.split('/');\nif (!site || !gateway) return null;\nconst actual = msg.payload?.actuators?.fan;\nlet pending = flow.get('fanAutoPending');\nif (typeof actual === 'boolean' && pending === actual) {\n    pending = null;\n    flow.set('fanAutoPending', null);\n    flow.set('fanAutoState', actual ? 'on' : 'off');\n}\nconst knownOn = typeof actual === 'boolean' ? actual : flow.get('fanAutoState') === 'on';\nif (pending === false || (!knownOn && pending !== true)) return null;\nflow.set('fanAutoPending', false);\nflow.set('fanAutoState', 'off');\nconst command = { action: 'turn_off', target: 'fan', source: 'local_rule', reason: 'temperature_below_25', temperature: v };\nconst alert = { severity: 'info', type: 'fan_auto_off', message: `Temperature ${v}°C is below the fan-off threshold (25°C); requesting fan OFF.`, device_id: msg.payload.device_id, timestamp: new Date().toISOString() };\nreturn [{ payload: command, topic: `local/${site}/${gateway}/command` }, { payload: alert, topic: `smarthome/${site}/${gateway}/alerts` }];",
+    "outputs": 2,
+    "x": 380,
+    "y": 160,
     "wires": [["local-command-out"], ["alert-out"]]
   },
   {

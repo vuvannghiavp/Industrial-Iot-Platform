@@ -93,6 +93,9 @@ class MqttService:
         values = payload.get("values")
         if not isinstance(values, dict):
             raise ValueError("Telemetry values must be an object")
+        actuators = payload.get("actuators", {})
+        if not isinstance(actuators, dict):
+            raise ValueError("Telemetry actuators must be an object")
         with SessionLocal() as db:
             device = db.get(Device, device_id)
             if device is None:
@@ -101,6 +104,10 @@ class MqttService:
             device.gateway_id = gateway_id
             device.is_online = True
             device.last_seen_at = measured_at
+            if isinstance(actuators.get("fan"), bool):
+                device.fan_state = actuators["fan"]
+            if isinstance(actuators.get("light"), bool):
+                device.light_state = actuators["light"]
             db.flush()
             readings = [
                 {

@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api import auth, devices, users, websocket
@@ -19,8 +20,8 @@ class WebSocketManager:
     def __init__(self) -> None:
         self.connections: set[WebSocket] = set()
 
-    async def connect(self, websocket: WebSocket) -> None:
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, subprotocol: str | None = None) -> None:
+        await websocket.accept(subprotocol=subprotocol)
         self.connections.add(websocket)
 
     def disconnect(self, websocket: WebSocket) -> None:
@@ -56,6 +57,12 @@ def initialize_database() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_sensor_reading_device_time_type "
             "ON sensor_readings (time, device_id, sensor_type)"
         ))
+        connection.execute(text(
+            "ALTER TABLE devices ADD COLUMN IF NOT EXISTS fan_state BOOLEAN"
+        ))
+        connection.execute(text(
+            "ALTER TABLE devices ADD COLUMN IF NOT EXISTS light_state BOOLEAN"
+        ))
     # This becomes a no-op when TimescaleDB is unavailable, so local SQL tests
     # can still use the regular PostgreSQL schema.
     try:
@@ -83,6 +90,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Smart Home API", version="1.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in get_settings().cors_origins.split(",")
+        if origin.strip()
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Accept", "Authorization", "Content-Type"],
+)
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(devices.router, prefix="/api/v1")

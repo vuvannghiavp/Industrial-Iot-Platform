@@ -37,6 +37,8 @@ class DeviceRead(BaseModel):
     kind: str
     is_online: bool
     last_seen_at: datetime | None
+    fan_state: bool | None
+    light_state: bool | None
 
 
 class SensorRead(BaseModel):

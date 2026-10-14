@@ -24,6 +24,8 @@ class Device(Base):
     kind: Mapped[str] = mapped_column(String(50), default="stm32")
     is_online: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fan_state: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    light_state: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
 
 class SensorReading(Base):

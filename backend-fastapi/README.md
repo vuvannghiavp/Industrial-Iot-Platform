@@ -73,11 +73,14 @@ values in `.env`; no default user is created when they are blank.
 
 `POST /api/v1/auth/login` uses standard OAuth2 form data: send the email in
 the `username` field and the password in the `password` field. WebSocket
-clients connect to `/ws/telemetry?token=<access_token>`.
+clients connect to `/ws/telemetry` and authenticate using the `bearer`
+subprotocol followed by the access token. Do not put the token in the URL.
 
 `Base.metadata.create_all()` creates missing tables at API startup. Startup
 also ensures the `sensor_readings.id` sequence and the
 `(time, device_id, sensor_type)` unique index used to deduplicate QoS 1
 redeliveries. Existing duplicate rows for the same device, sensor type, and
-timestamp must be reconciled before that index can be created. `create_all()`
-does not migrate other model changes; use a database migration for those.
+timestamp must be reconciled before that index can be created. Startup adds
+nullable `fan_state` and `light_state` columns to existing `devices` tables;
+the gateway populates them from Modbus coil telemetry and `GET /api/v1/devices`
+returns the last reported states.
