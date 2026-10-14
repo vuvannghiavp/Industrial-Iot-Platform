@@ -1,2 +1,2 @@
-idf_component_register(SRCS "Device_ESp32.c"
+idf_component_register(SRCS "main.c"
                     INCLUDE_DIRS ".")
