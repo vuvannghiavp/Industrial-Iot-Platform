@@ -1,0 +1,20 @@
+{
+  "name": "nocturne-smart-home-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart Home Telemetry & Control Dashboard (Nocturne UI) for FastAPI Backend",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "tsc && vite build",
+    "build:vite": "npm run build",
+    "preview": "vite preview --port 4173",
+    "test": "tsx --test tests/dashboard.test.ts"
+  },
+  "devDependencies": {
+      "@types/node": "^22.0.0",
+      "typescript": "^5.4.0",
+    "tsx": "^4.19.0",
+    "vite": "^5.2.0",
+    "vitest": "^1.5.0"
+  }
+}
