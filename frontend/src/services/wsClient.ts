@@ -1,6 +1,7 @@
 import {
   AlertItem,
   WsConnectionStatus,
+  WsDeviceStatusPayload,
   WsTelemetryPayload,
 } from '../types/api';
 import { TokenStore } from './tokenStore';
@@ -22,6 +23,7 @@ export interface WsClientCallbacks {
   onStatusChange?: (status: WsConnectionStatus, info: WsStatusMetadata) => void;
   onTelemetry?: (payload: WsTelemetryPayload) => void;
   onAlert?: (alert: AlertItem) => void;
+  onDeviceStatus?: (status: WsDeviceStatusPayload) => void;
 }
 
 export interface WsStatusMetadata {
@@ -292,6 +294,22 @@ export class TelemetryWebSocketClient {
         created_at:
           alertData.created_at || alertData.timestamp || alertData.time || new Date().toISOString(),
       });
+      return;
+    }
+
+    if (parsed.event === 'device_status' && parsed.data && typeof parsed.data === 'object') {
+      const data = parsed.data as Partial<WsDeviceStatusPayload>;
+      if (
+        typeof data.device_id === 'string' &&
+        typeof data.is_online === 'boolean' &&
+        (typeof data.last_seen_at === 'string' || data.last_seen_at === null)
+      ) {
+        this.callbacks.onDeviceStatus?.({
+          device_id: data.device_id,
+          is_online: data.is_online,
+          last_seen_at: data.last_seen_at,
+        });
+      }
     }
   }
 

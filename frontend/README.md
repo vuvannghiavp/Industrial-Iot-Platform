@@ -72,8 +72,8 @@ Không mở `dist/index.html` trực tiếp bằng `file://`; frontend cần HTT
    - Khi chưa có telemetry trạng thái từ gateway, UI hiển thị `Chưa rõ`; sau khi gateway chạy và đọc được coil, `devices.fan_state`/`devices.light_state` giữ trạng thái cuối trong database.
    - Nếu Modbus coil của phần cứng không phản ánh trạng thái thiết bị vật lý (ví dụ relay hỏng hoặc actuator không có phản hồi), trạng thái hiển thị là trạng thái coil mà gateway đọc, không phải kiểm định điện áp/cơ khí độc lập.
 2. **Trạng thái Online/Offline độc lập với trạng thái công tắc**:
-   - Chỉ hiển thị `Online`/`Offline` dựa trên `is_online` và `last_seen_at` từ `GET /api/v1/devices` và gói tin WebSocket telemetry; không suy diễn trạng thái quạt/đèn từ trạng thái kết nối.
+   - Backend đánh dấu thiết bị `Offline` sau 60 giây không nhận telemetry (có thể cấu hình qua `DEVICE_OFFLINE_TIMEOUT_SECONDS`) và phát sự kiện WebSocket cập nhật dashboard; không suy diễn trạng thái quạt/đèn từ trạng thái kết nối.
 3. **Danh sách thiết bị phụ thuộc vào gói Telemetry đầu tiên**:
    - Nếu `GET /api/v1/devices` trả về mảng rỗng `[]`, giao diện hiển thị hướng dẫn rõ ràng rằng backend chỉ tự động khởi tạo thiết bị sau khi nhận gói telemetry đầu tiên và tuyệt đối không tự tạo thiết bị giả ở chế độ API thật.
 4. **Lịch sử cảm biến (`GET /api/v1/sensors/history`)**:
-   - Dù truyền tham số `interval` (`raw`, `1m`, `5m`, `1h`, `1d`), backend hiện trả về các điểm dữ liệu nguyên bản (`raw points`) chưa qua gom nhóm phía server.
+   - `interval=raw` trả về điểm đo gốc; các giá trị `1m`, `5m`, `1h`, `1d` được backend gom thành giá trị trung bình theo từng thiết bị và khoảng thời gian.

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, literal_column, select
 
 from app.api.dependencies import CurrentUser, DbSession
 from app.api.schemas import AlertRead, ControlCommand, DeviceRead, SensorRead
@@ -31,20 +31,51 @@ def sensor_history(
     start_time: int,
     end_time: int,
     interval: str = Query("raw", pattern=r"^(raw|1m|5m|1h|1d)$"),
-) -> list[SensorReading]:
-    # `interval` is accepted for UI compatibility. Raw points are returned;
-    # production dashboards can add Timescale continuous aggregates for buckets.
+) -> list[SensorRead]:
     start = datetime.fromtimestamp(start_time, UTC)
     end = datetime.fromtimestamp(end_time, UTC)
     if end <= start:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
-    return db.scalars(
-        select(SensorReading).where(
-            SensorReading.sensor_type == type,
-            SensorReading.time >= start,
-            SensorReading.time <= end,
-        ).order_by(SensorReading.time)
-    ).all()
+    filters = (
+        SensorReading.sensor_type == type,
+        SensorReading.time >= start,
+        SensorReading.time <= end,
+    )
+    if interval == "raw":
+        readings = db.scalars(
+            select(SensorReading).where(*filters).order_by(SensorReading.time)
+        ).all()
+        return [
+            SensorRead.model_validate(reading, from_attributes=True)
+            for reading in readings
+        ]
+
+    bucket_width = {
+        "1m": literal_column("INTERVAL '1 minute'"),
+        "5m": literal_column("INTERVAL '5 minutes'"),
+        "1h": literal_column("INTERVAL '1 hour'"),
+        "1d": literal_column("INTERVAL '1 day'"),
+    }[interval]
+    bucketed_time = func.date_bin(
+        bucket_width,
+        SensorReading.time,
+        literal_column("TIMESTAMPTZ '2000-01-01 00:00:00+00'"),
+    )
+    statement = (
+        select(
+            bucketed_time.label("time"),
+            SensorReading.device_id,
+            SensorReading.sensor_type,
+            func.avg(SensorReading.value).label("value"),
+        )
+        .where(*filters)
+        .group_by(bucketed_time, SensorReading.device_id, SensorReading.sensor_type)
+        .order_by(bucketed_time, SensorReading.device_id)
+    )
+    return [
+        SensorRead.model_validate(row)
+        for row in db.execute(statement).mappings()
+    ]
 
 
 @router.get("/alerts", response_model=list[AlertRead])

@@ -1165,7 +1165,7 @@ export class SmartHomeDashboardApp {
           <div>
             <h2 class="panel-title">Lịch sử Cảm biến (<code>GET /api/v1/sensors/history</code>)</h2>
             <p class="panel-subtitle">
-              Lưu ý: Tham số <code>interval</code> hỗ trợ <code>raw, 1m, 5m, 1h, 1d</code> nhưng backend hiện trả về các điểm <strong>raw points</strong> mà chưa tự gom nhóm (bucket).
+              Dữ liệu lịch sử có thể xem theo điểm gốc hoặc giá trị trung bình theo từng thiết bị trong các khoảng <code>1m, 5m, 1h, 1d</code>.
             </p>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">

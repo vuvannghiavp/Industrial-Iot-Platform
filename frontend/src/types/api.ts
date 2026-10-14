@@ -152,6 +152,12 @@ export interface WsTelemetryPayload {
   actuators?: Partial<Record<ControlTarget, boolean>>;
 }
 
+export interface WsDeviceStatusPayload {
+  device_id: string;
+  is_online: boolean;
+  last_seen_at: string | null;
+}
+
 export interface WsTelemetryEvent {
   event: 'telemetry';
   data: WsTelemetryPayload;

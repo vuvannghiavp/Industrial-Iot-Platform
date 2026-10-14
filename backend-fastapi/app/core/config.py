@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
     bootstrap_admin_email: str = ""
     bootstrap_admin_password: str = ""
+    device_offline_timeout_seconds: int = Field(default=60, gt=0)
 
     @field_validator("jwt_secret")
     @classmethod

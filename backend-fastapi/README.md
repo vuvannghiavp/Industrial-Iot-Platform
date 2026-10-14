@@ -84,3 +84,9 @@ timestamp must be reconciled before that index can be created. Startup adds
 nullable `fan_state` and `light_state` columns to existing `devices` tables;
 the gateway populates them from Modbus coil telemetry and `GET /api/v1/devices`
 returns the last reported states.
+
+Devices are marked offline after no telemetry is received for
+`DEVICE_OFFLINE_TIMEOUT_SECONDS` (default 60 seconds). The API broadcasts that
+status change to connected dashboards over WebSocket. Sensor history requests
+using `interval=1m`, `5m`, `1h`, or `1d` return per-device average values in
+time buckets; `interval=raw` returns the original readings.

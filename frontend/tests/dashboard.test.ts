@@ -242,6 +242,20 @@ test('3. Luồng WebSocket: gửi ping duy trì loop, cập nhật telemetry the
     'off'
   );
 
+  ws.emitServerMessage({
+    event: 'device_status',
+    data: {
+      device_id: 'stm32-01',
+      is_online: false,
+      last_seen_at: '2026-10-14T03:00:00Z',
+    },
+  });
+  assert.equal(
+    store.getState().devices.find((device) => device.id === 'stm32-01')?.is_online,
+    false,
+    'Sự kiện trạng thái thiết bị phải cập nhật Online/Offline realtime'
+  );
+
   // Phát sự kiện alert qua WebSocket
   ws.emitServerMessage({
     event: 'alert',

@@ -175,6 +175,18 @@ export class DashboardStore {
       onAlert: (alert) => {
         this.prependRealtimeAlert(alert);
       },
+      onDeviceStatus: (status) => {
+        const updatedDevices = this.state.devices.map((device) =>
+          device.id === status.device_id
+            ? {
+                ...device,
+                is_online: status.is_online,
+                last_seen_at: status.last_seen_at,
+              }
+            : device
+        );
+        this.patchState({ devices: updatedDevices });
+      },
     });
   }
 
