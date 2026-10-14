@@ -1,0 +1,39 @@
+menu "Home MQTT Settings"
+
+config HOME_USER_ID
+    string "Home owner user ID"
+    default ""
+
+config HOME_ROOM_ID
+    string "Room ID"
+    default ""
+
+config HOME_DEVICE_ID
+    string "Device ID"
+    default ""
+
+config HOME_TEMPERATURE_SENSOR_ID
+    string "Temperature sensor ID"
+    default "dht22-01"
+
+config HOME_HUMIDITY_SENSOR_ID
+    string "Humidity sensor ID"
+    default "dht22-01"
+
+config HOME_ILLUMINANCE_SENSOR_ID
+    string "Illuminance sensor ID"
+    default "illuminance-01"
+
+config HOME_MOTION_SENSOR_ID
+    string "Motion sensor ID"
+    default "motion-01"
+
+config HOME_MQTT_BROKER_URI
+    string "Local Mosquitto broker URI (mqtt:// without TLS)"
+    default "mqtt://192.168.1.10:1883"
+
+config HOME_MQTT_PASSWORD
+    string "Local Mosquitto password"
+    default ""
+
+endmenu

@@ -1,14 +1,27 @@
-user gateway
+# User IDs are MQTT usernames. These rules only allow each user to access
+# topics whose owner segment matches its own username.
+pattern read home/v1/%u/+/+/command/#
+pattern write home/v1/%u/+/+/telemetry/#
+pattern write home/v1/%u/+/+/state/#
+pattern write home/v1/%u/+/+/availability
+
+# Add one user section per household user ID that sends the legacy aggregate
+# to AWS. The shared %u patterns above scope local topics to each username.
+user 1
 topic write smarthome/home-01/pi-gateway-01/telemetry
-topic read local/home-01/pi-gateway-01/command
 
 user node_red
 topic read smarthome/home-01/pi-gateway-01/telemetry
 topic read smarthome/home-01/pi-gateway-01/command
 topic write smarthome/home-01/pi-gateway-01/alerts
-topic write local/home-01/pi-gateway-01/command
+topic read home/v1/+/+/+/telemetry/#
+topic read home/v1/+/+/+/state/#
+topic write home/v1/+/+/+/command/#
 
 user aws_bridge
 topic read smarthome/home-01/pi-gateway-01/telemetry
 topic read smarthome/home-01/pi-gateway-01/alerts
 topic write smarthome/home-01/pi-gateway-01/command
+topic read home/v1/+/+/+/telemetry/#
+topic read home/v1/+/+/+/state/#
+topic read home/v1/+/+/+/availability

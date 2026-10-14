@@ -29,13 +29,18 @@ POLL_SECONDS = float(os.getenv("POLL_SECONDS", "2"))
 SAMPLES_PER_AGGREGATE = 10
 MQTT_HOST = os.getenv("LOCAL_MQTT_HOST", "127.0.0.1")
 MQTT_PORT = int(os.getenv("LOCAL_MQTT_PORT", "1883"))
-MQTT_USERNAME = os.getenv("LOCAL_MQTT_USERNAME", "")
+USER_ID = os.getenv("USER_ID", "")
+ROOM_ID = os.getenv("ROOM_ID", "")
+MQTT_USERNAME = USER_ID
 MQTT_PASSWORD = os.getenv("LOCAL_MQTT_PASSWORD", "")
 SITE_ID = os.getenv("SITE_ID", "home-01")
 GATEWAY_ID = os.getenv("GATEWAY_ID", "pi-gateway-01")
-DEVICE_ID = os.getenv("DEVICE_ID", "stm32-01")
-TOPIC = f"smarthome/{SITE_ID}/{GATEWAY_ID}/telemetry"
-COMMAND_TOPIC = f"local/{SITE_ID}/{GATEWAY_ID}/command"
+DEVICE_ID = os.getenv("DEVICE_ID", "")
+HOME_DEVICE_TOPIC = f"home/v1/{USER_ID}/{ROOM_ID}/{DEVICE_ID}"
+TELEMETRY_TOPIC = f"{HOME_DEVICE_TOPIC}/telemetry"
+STATE_TOPIC = f"{HOME_DEVICE_TOPIC}/state"
+COMMAND_TOPIC = f"{HOME_DEVICE_TOPIC}/command/+"
+CLOUD_TELEMETRY_TOPIC = f"smarthome/{SITE_ID}/{GATEWAY_ID}/telemetry"
 OUTBOX_PATH = Path(os.getenv(
     "GATEWAY_OUTBOX_PATH",
     str(Path(__file__).resolve().parent / "data" / "telemetry-outbox.sqlite3"),
@@ -48,6 +53,28 @@ REGISTER_MAP: dict[str, tuple[int, float]] = {
     "motion": (3, 1.0),
 }
 COIL_MAP = {"fan": 0, "light": 1}
+SENSOR_TOPIC_MAP = {
+    "temperature": (
+        os.getenv("TEMPERATURE_SENSOR_ID", "temperature-01"),
+        "temperature",
+        "Cel",
+    ),
+    "humidity": (
+        os.getenv("HUMIDITY_SENSOR_ID", "humidity-01"),
+        "humidity",
+        "%",
+    ),
+    "light": (
+        os.getenv("ILLUMINANCE_SENSOR_ID", "illuminance-01"),
+        "illuminance",
+        "lx",
+    ),
+    "motion": (
+        os.getenv("MOTION_SENSOR_ID", "motion-01"),
+        "occupancy",
+        "bool",
+    ),
+}
 
 
 class TelemetryOutbox:
@@ -99,13 +126,26 @@ class TelemetryOutbox:
                     (json.dumps(sample, separators=(",", ":")),),
                 )
 
-    def enqueue_batch(self, topic: str, payload: str) -> None:
+    def enqueue_batch(
+        self,
+        topic: str,
+        payload: str,
+        extra_messages: list[tuple[str, str]] | None = None,
+    ) -> None:
         with closing(self._connect()) as db:
             with db:
                 db.execute(
                     "INSERT INTO telemetry_outbox (topic, payload, created_at) VALUES (?, ?, ?)",
                     (topic, payload, datetime.now(UTC).isoformat()),
                 )
+                if extra_messages:
+                    db.executemany(
+                        "INSERT INTO telemetry_outbox (topic, payload, created_at) VALUES (?, ?, ?)",
+                        [
+                            (extra_topic, extra_payload, datetime.now(UTC).isoformat())
+                            for extra_topic, extra_payload in extra_messages
+                        ],
+                    )
                 db.execute("DELETE FROM pending_samples")
 
     def enqueue_event(self, topic: str, payload: str) -> None:
@@ -114,6 +154,17 @@ class TelemetryOutbox:
                 db.execute(
                     "INSERT INTO telemetry_outbox (topic, payload, created_at) VALUES (?, ?, ?)",
                     (topic, payload, datetime.now(UTC).isoformat()),
+                )
+
+    def enqueue_events(self, messages: list[tuple[str, str]]) -> None:
+        with closing(self._connect()) as db:
+            with db:
+                db.executemany(
+                    "INSERT INTO telemetry_outbox (topic, payload, created_at) VALUES (?, ?, ?)",
+                    [
+                        (topic, payload, datetime.now(UTC).isoformat())
+                        for topic, payload in messages
+                    ],
                 )
 
     def oldest(self) -> tuple[int, str, str] | None:
@@ -132,7 +183,22 @@ class TelemetryOutbox:
 class GatewayCollector:
     def __init__(self) -> None:
         if not MQTT_USERNAME or not MQTT_PASSWORD:
-            raise ValueError("LOCAL_MQTT_USERNAME and LOCAL_MQTT_PASSWORD must be configured")
+            raise ValueError("USER_ID and LOCAL_MQTT_PASSWORD must be configured")
+        topic_ids = {
+            "USER_ID": USER_ID,
+            "ROOM_ID": ROOM_ID,
+            "DEVICE_ID": DEVICE_ID,
+            **{
+                f"{sensor_type.upper()}_SENSOR_ID": sensor_config[0]
+                for sensor_type, sensor_config in SENSOR_TOPIC_MAP.items()
+            },
+        }
+        for name, topic_id in topic_ids.items():
+            if not topic_id or any(
+                not ("a" <= character <= "z" or "0" <= character <= "9" or character == "-")
+                for character in topic_id
+            ):
+                raise ValueError(f"{name} must contain only lowercase letters, digits, and hyphens")
 
         self.running = True
         self.stop_event = threading.Event()
@@ -193,19 +259,25 @@ class GatewayCollector:
         message: mqtt.MQTTMessage,
     ) -> None:
         try:
-            if message.topic != COMMAND_TOPIC:
+            topic_prefix = f"{HOME_DEVICE_TOPIC}/command/"
+            if not message.topic.startswith(topic_prefix):
                 LOG.warning("Ignoring command on unexpected topic %s", message.topic)
+                return
+            topic_target = message.topic[len(topic_prefix):]
+            if "/" in topic_target or topic_target not in COIL_MAP:
+                LOG.warning("Ignoring command for unsupported target on %s", message.topic)
                 return
             payload = json.loads(message.payload.decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("Command payload must be a JSON object")
             action = payload.get("action")
-            target = payload.get("target")
+            target = payload.get("target", topic_target)
             if (
                 not isinstance(action, str)
                 or action not in {"turn_on", "turn_off"}
                 or not isinstance(target, str)
                 or target not in COIL_MAP
+                or target != topic_target
             ):
                 raise ValueError("Unsupported command action or target")
             device_id = payload.get("device_id")
@@ -257,8 +329,27 @@ class GatewayCollector:
             "values": {},
             "actuators": states,
         }
+        timestamp = payload["timestamp"]
+        local_messages = [
+            (
+                f"{STATE_TOPIC}/{actuator_id}",
+                json.dumps(
+                    {
+                        "value": state,
+                        "unit": "bool",
+                        "timestamp": timestamp,
+                        "quality": "good",
+                    },
+                    separators=(",", ":"),
+                ),
+            )
+            for actuator_id, state in states.items()
+        ]
         try:
-            self.outbox.enqueue_event(TOPIC, json.dumps(payload, separators=(",", ":")))
+            self.outbox.enqueue_events(
+                [(CLOUD_TELEMETRY_TOPIC, json.dumps(payload, separators=(",", ":")))]
+                + local_messages
+            )
         except sqlite3.Error:
             LOG.exception("Could not persist actuator state; it will be retried on the next poll")
             return False
@@ -284,14 +375,36 @@ class GatewayCollector:
             "values": averages,
             "actuators": self.actuator_states,
         }
+        local_messages = []
+        for sensor_type, value in averages.items():
+            sensor_id, measurement, unit = SENSOR_TOPIC_MAP[sensor_type]
+            local_topic = f"{TELEMETRY_TOPIC}/{sensor_id}/{measurement}"
+            reading_value: float | bool = bool(value) if sensor_type == "motion" else value
+            local_payload = {
+                "value": reading_value,
+                "unit": unit,
+                "timestamp": payload["timestamp"],
+                "quality": "good",
+                "sample_count": len(self.samples),
+            }
+            local_messages.append(
+                (local_topic, json.dumps(local_payload, separators=(",", ":")))
+            )
         sample_count = len(self.samples)
         try:
-            self.outbox.enqueue_batch(TOPIC, json.dumps(payload, separators=(",", ":")))
+            self.outbox.enqueue_batch(
+                CLOUD_TELEMETRY_TOPIC,
+                json.dumps(payload, separators=(",", ":")),
+                extra_messages=local_messages,
+            )
         except sqlite3.Error:
             LOG.exception("Could not persist telemetry; keeping the batch in memory")
             return
         self.samples.clear()
-        LOG.info("Persisted %s-sample average for %s", sample_count, TOPIC)
+        LOG.info(
+            "Persisted %s-sample average for cloud and local telemetry",
+            sample_count,
+        )
 
     def flush_outbox(self) -> None:
         if not self.mqtt.is_connected():

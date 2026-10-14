@@ -11,6 +11,11 @@
 **/*.key
 **/*private*.crt
 
+# ESP-IDF generated output and local configuration (may contain credentials)
+**/build/
+**/sdkconfig
+**/sdkconfig.old
+
 # Python-generated files
 __pycache__/
 **/__pycache__/
