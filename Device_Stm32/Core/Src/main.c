@@ -381,6 +381,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, LED_Pin|FAN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, MOTION_LED_Pin|RS485_DE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : Data_DHT22_Pin */
@@ -402,7 +404,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(HC_SR522_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : motion indicator and RS485 driver enable */
+  /*Configure GPIO pins : MOTION_LED_Pin RS485_DE_Pin */
   GPIO_InitStruct.Pin = MOTION_LED_Pin|RS485_DE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
