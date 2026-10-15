@@ -1,0 +1,8 @@
+# Keil build output and per-user IDE state
+MDK-ARM/Device_Stm32/
+MDK-ARM/*.uvoptx
+MDK-ARM/*.uvguix.*
+
+# Common STM32CubeIDE build output
+Debug/
+Release/
