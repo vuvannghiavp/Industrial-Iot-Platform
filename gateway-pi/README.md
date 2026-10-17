@@ -51,9 +51,13 @@ password to the value provisioned on the ESP32 and gateway. Set the
 the config file permissions because Mosquitto bridge credentials are stored
 there in plaintext. Replace the placeholder in the deployed, protected copy
 of the config, not in a version-controlled source file. Keep AWS certificates
-readable only by the Mosquitto service account. The bridge uses its own AWS
-IoT certificate at `/etc/mosquitto/certs/certificate.pem.crt` and key at
-`/etc/mosquitto/certs/private.pem.key`, copied from this directory's `certs/`.
+readable only by the Mosquitto service account. The repository includes the
+public AWS IoT certificate at `certs/certificate.pem.crt` and root CA at
+`certs/AmazonRootCA1.pem`. Provision the matching private key separately and
+install it at `/etc/mosquitto/certs/private.pem.key`; never commit or share the
+private key through Git. The bridge uses these files at
+`/etc/mosquitto/certs/certificate.pem.crt` and
+`/etc/mosquitto/certs/private.pem.key`.
 Keep the FastAPI certificate and private key in the separate
 `backend-fastapi/certs/` directory; never reuse or copy the bridge private key
 for the API. The public AWS root CA may be installed for each component

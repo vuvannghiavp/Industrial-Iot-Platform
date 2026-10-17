@@ -5,6 +5,8 @@ data/
 *.sqlite3-shm
 *.sqlite3-wal
 passwd
-certs/
+certs/*
 *.pem
 *.key
+!certs/AmazonRootCA1.pem
+!certs/certificate.pem.crt

@@ -10,6 +10,9 @@
 **/*.pem
 **/*.key
 **/*private*.crt
+!gateway-pi/certs/
+!gateway-pi/certs/AmazonRootCA1.pem
+!gateway-pi/certs/certificate.pem.crt
 
 # ESP-IDF generated output and local configuration (may contain credentials)
 **/build/
